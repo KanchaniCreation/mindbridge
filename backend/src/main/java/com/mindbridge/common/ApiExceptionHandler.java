@@ -9,6 +9,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /** One place that turns exceptions into consistent RFC 7807 error bodies. */
 @RestControllerAdvice
@@ -36,6 +37,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ProblemDetail handleUnreadable(HttpMessageNotReadableException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Malformed request body.");
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+            "Invalid value for '" + ex.getName() + "'.");
     }
 
     /** Deliberately generic: never reveal whether the email or the password was wrong. */
