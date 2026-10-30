@@ -6,8 +6,7 @@ not therapy, and it does not diagnose.
 ## Status
 - Milestone 2: foundation (API, database, frontend shell, tests, CI).
 - Milestone 3: authentication (register, login, logout, profile, preferences, account deletion).
-- Milestone 4 (backend): private journal and mood tracker with search, filters, pagination and summaries.
-  The React pages for these come next.
+- Milestone 4: private journal and mood tracker (API, search, filters, pagination, summaries) and the React pages for them.
 
 ## Run locally
 1. `copy .env.example .env` and set a password.

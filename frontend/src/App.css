@@ -7,10 +7,58 @@
   padding: 0 1rem;
 }
 
+.content {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+}
+
+.brand {
+  font-weight: 700;
+}
+
+.app-header nav {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+}
+
+.app-header nav a[aria-current='page'] {
+  font-weight: 700;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.page-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
 .form {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
 }
 
 .field {
@@ -21,15 +69,71 @@
 
 .field input[type='text'],
 .field input[type='email'],
-.field input[type='password'] {
+.field input[type='password'],
+.field input[type='search'],
+.field select,
+.field textarea {
   padding: 0.6rem;
   font-size: 1rem;
+  font-family: inherit;
+}
+
+fieldset {
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  padding: 0.75rem 1rem;
+}
+
+.mood-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
 }
 
 .checkbox {
   display: flex;
   gap: 0.5rem;
   align-items: flex-start;
+}
+
+.entry-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.entry {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.entry h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+}
+
+.pager,
+.actions,
+.confirm {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.prompt {
+  border-left: 4px solid rgba(128, 128, 128, 0.5);
+  padding: 0.25rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.chart-scroll {
+  overflow-x: auto;
+}
+
+.link-list {
+  padding-left: 1.25rem;
 }
 
 .error {
@@ -45,4 +149,8 @@ button {
   padding: 0.6rem 1rem;
   font-size: 1rem;
   cursor: pointer;
+}
+
+.danger {
+  color: #b00020;
 }
