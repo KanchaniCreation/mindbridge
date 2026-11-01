@@ -42,6 +42,7 @@ public abstract class AbstractApiTest {
 
     @BeforeEach
     void resetDatabaseAndFetchCsrfToken() throws Exception {
+        jdbc.update("DELETE FROM chats");
         jdbc.update("DELETE FROM users");
         MvcResult result = mockMvc.perform(get("/api/v1/auth/csrf"))
             .andExpect(status().isNoContent())

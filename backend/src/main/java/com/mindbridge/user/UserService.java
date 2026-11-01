@@ -2,6 +2,7 @@ package com.mindbridge.user;
 
 import com.mindbridge.common.ApiException;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,12 +18,14 @@ public class UserService {
     private final UserRepository users;
     private final UserPreferencesRepository preferences;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationEventPublisher events;
 
     public UserService(UserRepository users, UserPreferencesRepository preferences,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder, ApplicationEventPublisher events) {
         this.users = users;
         this.preferences = preferences;
         this.passwordEncoder = passwordEncoder;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -54,13 +57,17 @@ public class UserService {
         return PreferencesResponse.from(prefs);
     }
 
-    /** Re-checks the password, then deletes the user. The database cascades to all owned rows. */
+    /**
+     * Re-checks the password, lets other modules clean up (for example, close chats), then deletes
+     * the user. The database cascades to all rows the user owns.
+     */
     @Transactional
     public void deleteAccount(UUID userId, String password) {
         User user = findUser(userId);
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Password confirmation failed.");
         }
+        events.publishEvent(new AccountDeleting(userId));
         users.delete(user);
     }
 

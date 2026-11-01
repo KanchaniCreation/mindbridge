@@ -31,6 +31,10 @@ public class User {
     @Column(name = "terms_accepted_at", nullable = false)
     private Instant termsAcceptedAt;
 
+    /** Self-declared "I am 18 or older", required before using chat. Not a verification. */
+    @Column(name = "adult_confirmed_at")
+    private Instant adultConfirmedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -78,6 +82,16 @@ public class User {
 
     public void setDisplayName(String displayName) {
         this.displayName = displayName;
+    }
+
+    public Instant getAdultConfirmedAt() {
+        return adultConfirmedAt;
+    }
+
+    public void confirmAdult(Instant at) {
+        if (this.adultConfirmedAt == null) {
+            this.adultConfirmedAt = at;
+        }
     }
 
     public Instant getCreatedAt() {
