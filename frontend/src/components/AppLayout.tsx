@@ -14,6 +14,7 @@ export default function AppLayout() {
           </NavLink>
           <NavLink to="/journal">Journal</NavLink>
           <NavLink to="/mood">Mood</NavLink>
+          <NavLink to="/chats">Chats</NavLink>
         </nav>
         <div className="header-user">
           <span>{user?.displayName ?? user?.email}</span>

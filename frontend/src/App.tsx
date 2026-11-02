@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import AuthProvider from './auth/AuthProvider'
 import ProtectedRoute from './auth/ProtectedRoute'
 import AppLayout from './components/AppLayout'
+import ChatPage from './pages/ChatPage'
+import ChatsPage from './pages/ChatsPage'
 import DashboardPage from './pages/DashboardPage'
 import JournalEditorPage from './pages/JournalEditorPage'
 import JournalPage from './pages/JournalPage'
@@ -28,6 +30,8 @@ export default function App() {
           <Route path="/journal/new" element={<JournalEditorPage />} />
           <Route path="/journal/:id" element={<JournalEditorPage />} />
           <Route path="/mood" element={<MoodPage />} />
+          <Route path="/chats" element={<ChatsPage />} />
+          <Route path="/chats/:id" element={<ChatPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
