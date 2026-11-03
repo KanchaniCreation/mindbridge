@@ -1,7 +1,6 @@
 package com.mindbridge.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -9,46 +8,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.mindbridge.AbstractApiTest;
+import com.mindbridge.MatchFixtures;
+import com.mindbridge.match.Topic;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MvcResult;
 
-class ChatApiTest extends AbstractApiTest {
-
-    private void confirmAdult(MockHttpSession session) throws Exception {
-        mockMvc.perform(withCsrf(post("/api/v1/chat/adult-confirmation")).session(session))
-            .andExpect(status().isNoContent());
-    }
-
-    private MockHttpSession adultUser() throws Exception {
-        MockHttpSession session = registerAndLogin(uniqueEmail());
-        confirmAdult(session);
-        return session;
-    }
-
-    private String createInvite(MockHttpSession session) throws Exception {
-        MvcResult result = mockMvc.perform(withCsrf(post("/api/v1/chat/invites")).session(session))
-            .andExpect(status().isCreated())
-            .andReturn();
-        return objectMapper.readTree(result.getResponse().getContentAsString()).get("code").asText();
-    }
-
-    private JsonNode redeem(MockHttpSession session, String code) throws Exception {
-        MvcResult result = mockMvc.perform(withCsrf(jsonPost("/api/v1/chat/invites/redeem",
-                Map.of("code", code))).session(session))
-            .andExpect(status().isCreated())
-            .andReturn();
-        return objectMapper.readTree(result.getResponse().getContentAsString());
-    }
-
-    /** A creates an invite, B redeems it. Returns the chat summary as B sees it. */
-    private JsonNode startChat(MockHttpSession creator, MockHttpSession joiner) throws Exception {
-        return redeem(joiner, createInvite(creator));
-    }
+class ChatApiTest extends MatchFixtures {
 
     private MvcResult sendRaw(MockHttpSession session, String chatId, UUID clientId, String text) throws Exception {
         return mockMvc.perform(withCsrf(jsonPost("/api/v1/chats/" + chatId + "/messages",
@@ -61,96 +29,43 @@ class ChatApiTest extends AbstractApiTest {
         return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
     }
 
-    private void deleteAccount(MockHttpSession session) throws Exception {
-        mockMvc.perform(withCsrf(delete("/api/v1/users/me")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("password", PASSWORD))))
-                .session(session))
-            .andExpect(status().isNoContent());
-    }
-
     @Test
-    void chatNeedsAnAdultConfirmationFirst() throws Exception {
+    void meetingPeopleNeedsAnAdultConfirmationFirst() throws Exception {
         MockHttpSession session = registerAndLogin(uniqueEmail());
+        assertThat(putProfile(session, profileBody("adult_check", true, Topic.STRESS))
+            .getResponse().getStatus()).isEqualTo(200);
 
         mockMvc.perform(get("/api/v1/users/me").session(session))
             .andExpect(jsonPath("$.adultConfirmed").value(false));
-        mockMvc.perform(withCsrf(post("/api/v1/chat/invites")).session(session))
+        mockMvc.perform(get("/api/v1/match/discover").session(session))
             .andExpect(status().isForbidden());
 
         confirmAdult(session);
 
         mockMvc.perform(get("/api/v1/users/me").session(session))
             .andExpect(jsonPath("$.adultConfirmed").value(true));
-        mockMvc.perform(withCsrf(post("/api/v1/chat/invites")).session(session))
-            .andExpect(status().isCreated());
+        mockMvc.perform(get("/api/v1/match/discover").session(session))
+            .andExpect(status().isOk());
     }
 
     @Test
-    void inviteCreatesAPseudonymousChatForBothPeople() throws Exception {
-        MockHttpSession creator = adultUser();
-        MockHttpSession joiner = adultUser();
-        String code = createInvite(creator);
+    void aMatchCreatesAChatWhereEachPersonSeesTheOthersAlias() throws Exception {
+        MockHttpSession first = openUser("first_person", Topic.SLEEP);
+        MockHttpSession second = openUser("second_person", Topic.SLEEP);
 
-        JsonNode chat = redeem(joiner, code);
+        JsonNode chat = startChat(first, second);
 
         assertThat(chat.toString()).as("no email or user id in the response").doesNotContain("@");
-        assertThat(chat.get("myPseudonym").asText()).isNotEqualTo(chat.get("partnerPseudonym").asText());
+        assertThat(chat.get("myPseudonym").asText()).isEqualTo("second_person");
+        assertThat(chat.get("partnerPseudonym").asText()).isEqualTo("first_person");
 
-        MvcResult creatorList = mockMvc.perform(get("/api/v1/chats").session(creator))
+        MvcResult firstList = mockMvc.perform(get("/api/v1/chats").session(first))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.length()").value(1))
             .andReturn();
-        JsonNode first = objectMapper.readTree(creatorList.getResponse().getContentAsString()).get(0);
-        assertThat(first.get("myPseudonym").asText()).isEqualTo(chat.get("partnerPseudonym").asText());
-        assertThat(first.get("partnerPseudonym").asText()).isEqualTo(chat.get("myPseudonym").asText());
-
-        // Only a hash of the code is stored, never the code itself.
-        Integer rawRows = jdbc.queryForObject(
-            "SELECT count(*) FROM chat_invites WHERE code_hash = ?", Integer.class, InviteCodes.normalize(code));
-        Integer hashedRows = jdbc.queryForObject(
-            "SELECT count(*) FROM chat_invites WHERE code_hash = ?", Integer.class,
-            InviteCodes.hash(InviteCodes.normalize(code)));
-        assertThat(rawRows).isZero();
-        assertThat(hashedRows).isEqualTo(1);
-    }
-
-    @Test
-    void anInviteCanBeUsedOnlyOnce() throws Exception {
-        MockHttpSession creator = adultUser();
-        String code = createInvite(creator);
-        redeem(adultUser(), code);
-
-        mockMvc.perform(withCsrf(jsonPost("/api/v1/chat/invites/redeem", Map.of("code", code)))
-                .session(adultUser()))
-            .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void youCannotUseYourOwnInvite() throws Exception {
-        MockHttpSession creator = adultUser();
-        String code = createInvite(creator);
-
-        mockMvc.perform(withCsrf(jsonPost("/api/v1/chat/invites/redeem", Map.of("code", code)))
-                .session(creator))
-            .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void wrongAndExpiredCodesGetTheSameGenericAnswer() throws Exception {
-        MockHttpSession creator = adultUser();
-        MockHttpSession joiner = adultUser();
-        String expiredCode = createInvite(creator);
-        jdbc.update("UPDATE chat_invites SET expires_at = now() - interval '1 hour'");
-
-        mockMvc.perform(withCsrf(jsonPost("/api/v1/chat/invites/redeem", Map.of("code", "ZZZZZ-ZZZZZ")))
-                .session(joiner))
-            .andExpect(status().isNotFound())
-            .andExpect(jsonPath("$.detail").value("That invite code is not valid or has expired."));
-        mockMvc.perform(withCsrf(jsonPost("/api/v1/chat/invites/redeem", Map.of("code", expiredCode)))
-                .session(joiner))
-            .andExpect(status().isNotFound())
-            .andExpect(jsonPath("$.detail").value("That invite code is not valid or has expired."));
+        JsonNode listed = objectMapper.readTree(firstList.getResponse().getContentAsString()).get(0);
+        assertThat(listed.get("myPseudonym").asText()).isEqualTo("first_person");
+        assertThat(listed.get("partnerPseudonym").asText()).isEqualTo("second_person");
     }
 
     @Test

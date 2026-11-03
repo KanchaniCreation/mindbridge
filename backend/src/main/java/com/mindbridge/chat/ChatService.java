@@ -23,7 +23,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Chat between two people who only see each other's pseudonyms.
+ * Chat between two people who only see each other's aliases. Chats are created by the match
+ * module (when two people both choose Match); this service handles everything after that.
  * Every method gets the user id from the session and checks membership, so a stranger's chat id
  * returns 404 exactly like an id that does not exist.
  */
@@ -31,34 +32,30 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatService {
 
     static final String FORMER_PARTICIPANT = "Former participant";
-    private static final Duration INVITE_VALIDITY = Duration.ofHours(24);
-    private static final int MAX_PENDING_INVITES = 5;
     private static final int MAX_PAGE_SIZE = 100;
 
     private final UserRepository users;
     private final ChatRepository chats;
     private final ChatParticipantRepository participants;
     private final ChatMessageRepository messages;
-    private final ChatInviteRepository invites;
     private final ChatReportRepository reports;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final AdultGate adultGate;
     private final FixedWindowRateLimiter messageLimiter;
-    private final FixedWindowRateLimiter redeemLimiter;
 
     public ChatService(UserRepository users, ChatRepository chats, ChatParticipantRepository participants,
-                       ChatMessageRepository messages, ChatInviteRepository invites,
-                       ChatReportRepository reports, ApplicationEventPublisher events, Clock clock) {
+                       ChatMessageRepository messages, ChatReportRepository reports,
+                       ApplicationEventPublisher events, Clock clock, AdultGate adultGate) {
         this.users = users;
         this.chats = chats;
         this.participants = participants;
         this.messages = messages;
-        this.invites = invites;
         this.reports = reports;
         this.events = events;
         this.clock = clock;
+        this.adultGate = adultGate;
         this.messageLimiter = new FixedWindowRateLimiter(30, Duration.ofMinutes(1), clock);
-        this.redeemLimiter = new FixedWindowRateLimiter(10, Duration.ofMinutes(15), clock);
     }
 
     @Transactional
@@ -66,45 +63,6 @@ public class ChatService {
         User user = users.findById(userId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Account not found."));
         user.confirmAdult(clock.instant());
-    }
-
-    @Transactional
-    public InviteResponse createInvite(UUID userId) {
-        requireAdult(userId);
-        Instant now = clock.instant();
-        if (invites.countByCreatorIdAndUsedAtIsNullAndExpiresAtAfter(userId, now) >= MAX_PENDING_INVITES) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS,
-                "You already have 5 unused invites. Wait for one to be used or to expire.");
-        }
-        String code = InviteCodes.generate();
-        Instant expiresAt = now.plus(INVITE_VALIDITY);
-        invites.save(new ChatInvite(userId, InviteCodes.hash(code), expiresAt));
-        return new InviteResponse(InviteCodes.format(code), expiresAt);
-    }
-
-    @Transactional
-    public ChatSummaryResponse redeemInvite(UUID userId, String rawCode) {
-        requireAdult(userId);
-        if (!redeemLimiter.tryAcquire(userId.toString())) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "Too many attempts. Please wait a few minutes.");
-        }
-        ChatInvite invite = invites.findByCodeHashForUpdate(InviteCodes.hash(InviteCodes.normalize(rawCode)))
-            .orElseThrow(ChatService::inviteNotFound);
-        Instant now = clock.instant();
-        // Same generic answer for unknown, used, expired and own invites, so nothing is revealed.
-        if (invite.getUsedAt() != null || !invite.getExpiresAt().isAfter(now)
-                || invite.getCreatorId().equals(userId)) {
-            throw inviteNotFound();
-        }
-
-        Chat chat = chats.save(new Chat());
-        List<String> names = PseudonymGenerator.pair();
-        participants.save(new ChatParticipant(chat.getId(), invite.getCreatorId(), names.get(0)));
-        participants.save(new ChatParticipant(chat.getId(), userId, names.get(1)));
-        invite.markUsed(now);
-
-        return new ChatSummaryResponse(chat.getId(), chat.getStatus(), names.get(1), names.get(0),
-            chat.getCreatedAt(), null);
     }
 
     @Transactional(readOnly = true)
@@ -149,7 +107,7 @@ public class ChatService {
 
     @Transactional
     public ChatMessageResponse sendMessage(UUID userId, UUID chatId, MessageRequest request) {
-        requireAdult(userId);
+        adultGate.requireAdult(userId);
         requireMember(userId, chatId);
         Chat chat = chats.findById(chatId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Chat not found."));
@@ -217,16 +175,6 @@ public class ChatService {
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Chat not found."));
     }
 
-    private void requireAdult(UUID userId) {
-        boolean confirmed = users.findById(userId)
-            .map(u -> u.getAdultConfirmedAt() != null)
-            .orElse(false);
-        if (!confirmed) {
-            throw new ApiException(HttpStatus.FORBIDDEN,
-                "Please confirm that you are 18 or older to use chat.");
-        }
-    }
-
     private Map<UUID, String> pseudonymsOf(UUID chatId) {
         Map<UUID, String> names = new HashMap<>();
         for (ChatParticipant p : participants.findByChatId(chatId)) {
@@ -238,9 +186,5 @@ public class ChatService {
     private static ChatMessageResponse toResponse(ChatMessage m, UUID viewerId, Map<UUID, String> names) {
         return new ChatMessageResponse(m.getId(), m.getSenderId().equals(viewerId),
             names.getOrDefault(m.getSenderId(), FORMER_PARTICIPANT), m.getBody(), m.getCreatedAt());
-    }
-
-    private static ApiException inviteNotFound() {
-        return new ApiException(HttpStatus.NOT_FOUND, "That invite code is not valid or has expired.");
     }
 }

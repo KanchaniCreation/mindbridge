@@ -35,6 +35,24 @@ public class User {
     @Column(name = "adult_confirmed_at")
     private Instant adultConfirmedAt;
 
+    /** The only name other people see while matching and chatting. Unique, case-insensitive. */
+    @Column(length = 20)
+    private String alias;
+
+    @Column(length = 140)
+    private String about;
+
+    /** Never shown to anyone until both people agree to reveal it. */
+    @Column(name = "real_name", length = 60)
+    private String realName;
+
+    /** Comma-separated topic names, for example "SLEEP,STUDY". Parsed by the match module. */
+    @Column(name = "topics", nullable = false, length = 200)
+    private String topics = "";
+
+    @Column(name = "open_to_chat", nullable = false)
+    private boolean openToChat;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -92,6 +110,35 @@ public class User {
         if (this.adultConfirmedAt == null) {
             this.adultConfirmedAt = at;
         }
+    }
+
+    public String getAlias() {
+        return alias;
+    }
+
+    public String getAbout() {
+        return about;
+    }
+
+    public String getRealName() {
+        return realName;
+    }
+
+    public String getTopicsCsv() {
+        return topics;
+    }
+
+    public boolean isOpenToChat() {
+        return openToChat;
+    }
+
+    public void updateMatchProfile(String alias, String about, String realName, String topicsCsv,
+                                   boolean openToChat) {
+        this.alias = alias;
+        this.about = about;
+        this.realName = realName;
+        this.topics = topicsCsv == null ? "" : topicsCsv;
+        this.openToChat = openToChat;
     }
 
     public Instant getCreatedAt() {

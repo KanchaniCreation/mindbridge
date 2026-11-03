@@ -38,19 +38,6 @@ public class ChatController {
         chat.confirmAdult(me.getId());
     }
 
-    @PostMapping("/chat/invites")
-    @ResponseStatus(HttpStatus.CREATED)
-    public InviteResponse createInvite(@AuthenticationPrincipal AppUserDetails me) {
-        return chat.createInvite(me.getId());
-    }
-
-    @PostMapping("/chat/invites/redeem")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ChatSummaryResponse redeem(@AuthenticationPrincipal AppUserDetails me,
-                                      @Valid @RequestBody RedeemInviteRequest request) {
-        return chat.redeemInvite(me.getId(), request.code());
-    }
-
     @GetMapping("/chats")
     public List<ChatSummaryResponse> list(@AuthenticationPrincipal AppUserDetails me) {
         return chat.listChats(me.getId());
